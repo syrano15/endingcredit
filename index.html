@@ -299,11 +299,6 @@ input[type="date"].in{min-height:40px}
   </div>
 
   <div class="places" id="places" role="group" aria-label="본 곳">
-    <button class="pill" data-p="all" aria-pressed="true">전체 <em></em></button>
-    <button class="pill" data-p="극장" aria-pressed="false">극장 <em></em></button>
-    <button class="pill" data-p="OTT" aria-pressed="false">OTT <em></em></button>
-    <button class="pill" data-p="블루레이" aria-pressed="false">블루레이 <em></em></button>
-    <button class="pill" data-p="TV" aria-pressed="false">TV <em></em></button>
   </div>
 
   <div class="tools">
@@ -436,8 +431,10 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 
 /* ---------- 상수 ---------- */
 const KEY = 'endingcredit.v2', OLD_KEY = 'endingcredit.v1', THEME_KEY = 'endingcredit.theme';
-const PLACES = [['극장','#d1453b'],['OTT','#4f46c8'],['블루레이','#1e7fc6'],['TV','#2f8f6a']];
-const placeColor = p => (PLACES.find(x => x[0] === p) || [,'#868f97'])[1];
+const PLACES = [['극장','#7c5cd6'],['넷플릭스','#e50914'],['쿠팡플레이','#1f7ae0'],['디즈니플러스','#0b2fa8'],['아마존프라임','#00a8e1'],['블루레이','#5b6b84'],['TV','#2f8f6a']];
+/* 예전 'OTT' 기록은 지우지 않는다 — 그런 기록이 있을 때만 탭·선택지에 보인다 */
+const LEGACY_PLACES = [['OTT','#868f97']];
+const placeColor = p => ([...PLACES, ...LEGACY_PLACES].find(x => x[0] === p) || [,'#868f97'])[1];
 const POSTER = ['#3b5b92','#5b4b8a','#2f6f6a','#8a3b4b','#44546a','#6a4b8a','#2d6a8a','#7a4a6a','#35606f','#5a5f8a'];
 const posterColor = t => { let h = 0; for (const c of t) h = (h*31 + c.charCodeAt(0)) >>> 0; return POSTER[h % POSTER.length]; };
 const HINTS = {0:'눌러서 매기기',0.5:'최악',1:'시간 낭비',1.5:'본전 생각',2:'별로',2.5:'그럭저럭',3:'볼만함',3.5:'괜찮음',4:'좋았음',4.5:'훌륭함',5:'인생작'};
@@ -617,9 +614,10 @@ function renderStats(){
   const best = rated.filter(e => e.rating >= 4.5).length;
   $('#statsLine').innerHTML = `<span>${y}년 <b>${yc}</b>편</span><span>전체 <b>${seen.length}</b>편</span><span>평균 <b>${avg}</b></span><span>볼 영화 <b>${wants}</b>편</span>` +
     (best ? `<span>4.5점 이상 <b>${best}</b>편</span>` : '');
-  $$('#places .pill').forEach(p => {
-    const k = p.dataset.p; p.querySelector('em').textContent = k === 'all' ? seen.length : seen.filter(e => e.where === k).length;
-  });
+  const used = LEGACY_PLACES.filter(([k]) => seen.some(e => e.where === k));
+  const all = [['all'], ...PLACES, ...used];
+  if (!all.some(([k]) => k === place)) place = 'all';
+  $('#places').innerHTML = all.map(([k]) => `<button class="pill" data-p="${k}" aria-pressed="${k === place}">${k === 'all' ? '전체' : k} <em>${k === 'all' ? seen.length : seen.filter(e => e.where === k).length}</em></button>`).join('');
 }
 
 /* ---------- 목록 (노드 재사용 + FLIP) ---------- */
@@ -703,9 +701,10 @@ function setView(v){
   renderList();
 }
 $$('.tab').forEach(t => t.addEventListener('click', () => setView(t.dataset.v)));
-$$('#places .pill').forEach(p => p.addEventListener('click', () => {
+$('#places').addEventListener('click', e => {
+  const p = e.target.closest('.pill'); if (!p) return;
   place = p.dataset.p; $$('#places .pill').forEach(x => x.setAttribute('aria-pressed', String(x === p))); renderList();
-}));
+});
 $$('#rateFilter button').forEach(b => b.addEventListener('click', () => {
   rateF = b.dataset.f; $$('#rateFilter button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderList();
 }));
@@ -752,10 +751,16 @@ starIn.addEventListener('keydown', e => {
   else if (k === 'Home'){ e.preventDefault(); setRating(0); }
   else if (k === 'End'){ e.preventDefault(); setRating(5); }
 });
-$('#fWhere').innerHTML = PLACES.map(([p,c]) => `<button type="button" data-w="${p}" aria-pressed="false" style="--tc:${c}"><i></i>${p}</button>`).join('');
-const whereBtns = $$('#fWhere button');
-function setWhere(w){ where = w; whereBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.w === w))); }
-whereBtns.forEach(b => b.addEventListener('click', () => setWhere(where === b.dataset.w ? '' : b.dataset.w)));
+function setWhere(w){
+  where = w;
+  const list = [...PLACES, ...LEGACY_PLACES.filter(([k]) => k === w)];
+  $('#fWhere').innerHTML = list.map(([p,c]) => `<button type="button" data-w="${p}" aria-pressed="${p === w}" style="--tc:${c}"><i></i>${p}</button>`).join('');
+}
+$('#fWhere').addEventListener('click', e => {
+  const b = e.target.closest('[data-w]'); if (!b) return;
+  where = where === b.dataset.w ? '' : b.dataset.w;
+  $$('#fWhere button').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.w === where)));
+});
 
 const btnDel = $('#btnDel');
 function disarm(){ btnDel.classList.remove('armed'); btnDel.textContent = '삭제'; clearTimeout(btnDel._t); }
