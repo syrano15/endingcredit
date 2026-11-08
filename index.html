@@ -238,6 +238,8 @@ input[type="date"].in{min-height:40px}
 @media (hover:hover) and (pointer:fine){ .menu button:hover{background:var(--surface-2)} }
 .menu hr{border:0;border-top:1px solid var(--line);margin:4px}
 .menu small{color:var(--faint)}
+.ver{padding:6px 10px 4px;font-size:12px;color:var(--faint)}
+.ver b{font-weight:700;font-variant-numeric:tabular-nums}
 
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;font-weight:600;opacity:0;
   transition:opacity .16s ease,transform .16s var(--ease-out);pointer-events:none;z-index:50;max-width:calc(100% - 32px)}
@@ -285,6 +287,8 @@ input[type="date"].in{min-height:40px}
         <button data-act="import">백업 파일 가져오기</button>
         <hr>
         <button data-act="theme">테마 <small id="themeLabel"></small></button>
+        <hr>
+        <div class="ver">엔딩크레딧 <b class="appVer"></b></div>
       </div>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
     </div>
@@ -318,7 +322,7 @@ input[type="date"].in{min-height:40px}
 
   <div class="list" id="list"></div>
   <div class="empty-box" id="empty" hidden></div>
-  <p class="credit">포스터와 영화 정보: TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+  <p class="credit"><b class="appVer"></b> · 포스터와 영화 정보: TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
 </div>
 
 <button class="fab" id="addBtn" aria-label="기록하기">+</button>
@@ -430,6 +434,7 @@ const lsSet = (k,v) => { try{ localStorage.setItem(k,v); return true; }catch(_){
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* ---------- 상수 ---------- */
+const APP_VERSION = 'v1.3'; /* v1.0 첫 버전 · v1.1 데이로그 가져오기 · v1.2 TMDB 포스터 · v1.3 OTT 서비스별 탭 */
 const KEY = 'endingcredit.v2', OLD_KEY = 'endingcredit.v1', THEME_KEY = 'endingcredit.theme';
 const PLACES = [['극장','#7c5cd6'],['넷플릭스','#e50914'],['쿠팡플레이','#1f7ae0'],['디즈니플러스','#0b2fa8'],['아마존프라임','#00a8e1'],['블루레이','#5b6b84'],['TV','#2f8f6a']];
 /* 예전 'OTT' 기록은 지우지 않는다 — 그런 기록이 있을 때만 탭·선택지에 보인다 */
@@ -1172,6 +1177,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 setInterval(() => { if (document.visibilityState === 'visible') syncNow(true); }, 120000);
 
 /* ---------- 시작 ---------- */
+$$('.appVer').forEach(el => { el.textContent = APP_VERSION; });
 load(); applyTheme(); setView('seen'); renderHero(); renderStats(); renderSyncBadge(); renderTmdbBadge(); syncNow(true);
 setTimeout(() => fillPosters(true), 4000);
 
