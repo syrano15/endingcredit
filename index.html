@@ -78,6 +78,22 @@ header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;
 .poster::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.14),transparent 40%)}
 .poster span{position:relative;text-shadow:0 1px 2px rgba(0,0,0,.35);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
 .poster.sm{width:48px;height:69px;font-size:9px}
+.poster img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:var(--surface-2)}
+.poster.has-img::before{display:none}
+.picks{display:flex;align-items:flex-start;gap:10px;overflow-x:auto;padding:10px 2px 4px;scrollbar-width:thin}
+.picks:empty{display:none}
+.pick{flex:none;width:76px;border:2px solid transparent;border-radius:9px;padding:2px;background:none;cursor:pointer;text-align:left;
+  transition:border-color .15s ease,transform .16s var(--ease-out)}
+.pick:active{transform:scale(.96)}
+@media (hover:hover) and (pointer:fine){ .pick:hover{border-color:color-mix(in srgb,var(--accent) 50%,transparent)} }
+.pick[aria-pressed="true"]{border-color:var(--accent)}
+.pick .ph{display:block;width:100%;aspect-ratio:2/3;border-radius:6px;background:var(--surface-2);object-fit:cover}
+.pick .ph.none{display:grid;place-items:center;color:var(--faint);font-size:11px}
+.pick small{display:block;font-size:11px;line-height:1.3;color:var(--muted);margin-top:4px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pick small b{color:var(--text);font-weight:600}
+.pickmsg{font-size:12px;color:var(--faint);margin-top:6px}
+.pickmsg button{background:none;border:0;padding:0;color:var(--accent);font-weight:700;font-size:12px;cursor:pointer}
+.credit{margin:36px 2px 0;font-size:11px;color:var(--faint);text-align:center}
 .poster.lg{width:104px;height:150px;font-size:13px;padding:8px}
 
 /* stars */
@@ -262,6 +278,9 @@ input[type="date"].in{min-height:40px}
         <button data-act="sync">기기 간 동기화 <small id="syncBadge"></small></button>
         <button data-act="daylog">데이로그 언젠가 영화 가져오기</button>
         <hr>
+        <button data-act="tmdb">포스터 설정 (TMDB 키) <small id="tmdbBadge"></small></button>
+        <button data-act="fillposters">포스터 한 번에 찾기</button>
+        <hr>
         <button data-act="export">백업 파일 내보내기</button>
         <button data-act="import">백업 파일 가져오기</button>
         <hr>
@@ -304,6 +323,7 @@ input[type="date"].in{min-height:40px}
 
   <div class="list" id="list"></div>
   <div class="empty-box" id="empty" hidden></div>
+  <p class="credit">포스터와 영화 정보: TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
 </div>
 
 <button class="fab" id="addBtn" aria-label="기록하기">+</button>
@@ -317,6 +337,7 @@ input[type="date"].in{min-height:40px}
         <label class="f"><span>제목</span><input class="in" id="fTitle" maxlength="120" placeholder="영화 제목"></label>
         <label class="f"><span>개봉연도 (선택)</span><input class="in" id="fYear" inputmode="numeric" maxlength="4" placeholder="예: 2024"></label>
       </div>
+      <div id="pickWrap"><div class="picks" id="picks" role="group" aria-label="포스터 고르기"></div><div class="pickmsg" id="pickMsg"></div></div>
       <label class="f want-only"><span>메모 (선택)</span><input class="in" id="fMemo" maxlength="200" placeholder="왜 보고 싶은지, 누가 추천했는지"></label>
       <div class="f seen-only">
         <span class="flabel" id="lblStar">별점</span>
@@ -371,6 +392,27 @@ input[type="date"].in{min-height:40px}
   </div>
 </dialog>
 
+<!-- TMDB 키 -->
+<dialog id="tmdbDlg">
+  <form class="sheet" id="tmdbForm" method="dialog" novalidate>
+    <div class="sheet-hd"><h3>포스터 설정</h3></div>
+    <div class="sheet-bd">
+      <p style="margin:4px 0 0;line-height:1.6;color:var(--muted);font-size:14px">TMDB에서 제목으로 포스터를 찾아 붙여요. 기기마다 처음 한 번만 키를 넣으면 돼요.</p>
+      <ol style="margin:12px 0 0;padding-left:20px;font-size:14px;line-height:1.7">
+        <li><a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700">TMDB API 설정 열기 ↗</a></li>
+        <li>맨 아래 <b>API 키</b>(32자리)를 복사</li>
+        <li>아래에 붙여넣고 <b>저장</b></li>
+      </ol>
+      <label class="f"><span>TMDB API 키</span><input class="in" id="tmdbKey" autocomplete="off" spellcheck="false" placeholder="32자리 키 (긴 읽기 토큰도 돼요)"></label>
+      <p class="bmsg" id="tmdbMsg">키는 이 기기의 브라우저에만 저장돼요.</p>
+    </div>
+    <div class="sheet-ft">
+      <button type="button" class="btn ghost danger sm" id="tmdbOff" hidden>키 지우기</button>
+      <div class="right"><button type="button" class="btn" data-close>닫기</button><button type="submit" class="btn primary" id="tmdbSave">저장</button></div>
+    </div>
+  </form>
+</dialog>
+
 <!-- 동기화 -->
 <dialog id="syncDlg">
   <div class="sheet">
@@ -415,6 +457,7 @@ function normEntry(raw){
     rating: Math.max(0, Math.min(5, Math.round((+raw.rating || 0)*2)/2)),
     line: String(raw.line || ''), note: String(raw.note || ''), memo: String(raw.memo || ''),
     date: String(raw.date || ''), where: String(raw.where || ''),
+    poster: /^\/[\w.-]+$/.test(raw.poster || '') ? raw.poster : '', tmdbId: +raw.tmdbId || 0,
     createdAt: +raw.createdAt || Date.now(), updatedAt: +raw.updatedAt || Date.now()
   };
 }
@@ -443,7 +486,69 @@ function makePoster(e, size){
   const p = document.createElement('div'); p.className = 'poster ' + size;
   p.style.setProperty('--pc', posterColor(e.title));
   const s = document.createElement('span'); s.textContent = e.title; p.append(s);
+  if (e.poster){
+    const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+    img.src = IMG + (size === 'lg' ? 'w342' : 'w185') + e.poster;
+    img.onerror = () => img.remove();
+    p.append(img); p.classList.add('has-img');
+  }
   return p;
+}
+
+/* ---------- TMDB 포스터 ----------
+   키는 이 기기 브라우저에만 둔다. 기록에는 포스터 경로(/abc.jpg)와 TMDB 번호만 남겨서 동기화된다. */
+const TMDB_KEY = 'endingcredit.tmdb', IMG = 'https://image.tmdb.org/t/p/';
+const tmdbKey = () => (lsGet(TMDB_KEY) || '').trim();
+const normT = s => String(s || '').replace(/[\s:·.,!?'"\-–—]/g, '').toLowerCase();
+async function tmdb(path, params, key = tmdbKey()){
+  const u = new URL('https://api.themoviedb.org/3' + path);
+  Object.entries(params || {}).forEach(([k, v]) => { if (v !== '' && v != null) u.searchParams.set(k, v); });
+  const headers = { accept: 'application/json' };
+  if (key.startsWith('eyJ')) headers.Authorization = 'Bearer ' + key; else u.searchParams.set('api_key', key);
+  const r = await fetch(u, { headers });
+  if (r.status === 401) throw new Error('key'); if (!r.ok) throw new Error('http');
+  return r.json();
+}
+async function searchMovies(q, year){
+  const base = { query: q, language: 'ko-KR', include_adult: 'false' };
+  let res = (await tmdb('/search/movie', { ...base, year: year || '' })).results || [];
+  if (!res.length && year) res = (await tmdb('/search/movie', base)).results || [];
+  return res.slice(0, 10).map(m => ({ id: m.id, title: m.title || m.original_title, orig: m.original_title || '', year: (m.release_date || '').slice(0, 4), poster: m.poster_path || '' }));
+}
+function bestMatch(e, list){
+  const t = normT(e.title);
+  const same = list.filter(m => m.poster && (normT(m.title) === t || normT(m.orig) === t));
+  if (!same.length) return null;
+  return (e.year && same.find(m => m.year === e.year)) || (same.length === 1 ? same[0] : null);
+}
+let filling = false; const triedPoster = new Set();
+async function fillPosters(quiet = true){
+  if (!tmdbKey()){ if (!quiet) openTmdb(); return; }
+  if (filling) return; filling = true;
+  const targets = state.entries.filter(e => !e.poster && (!quiet || !triedPoster.has(e.id)));
+  let got = 0, miss = 0;
+  try {
+    for (const e of targets){
+      triedPoster.add(e.id);
+      const m = bestMatch(e, await searchMovies(e.title, e.year));
+      if (m){ e.poster = m.poster; e.tmdbId = m.id; if (!e.year && m.year) e.year = m.year; e.updatedAt = Date.now(); got++; } else miss++;
+    }
+  } catch(err){
+    if (!quiet) toast(err.message === 'key' ? 'TMDB 키가 맞지 않아요. 포스터 설정을 확인해 주세요' : '포스터를 찾지 못했어요. 잠시 후 다시 해주세요');
+    filling = false; if (got){ save(); render(); } return;
+  }
+  filling = false;
+  if (got){ save(); render(); }
+  if (got || !quiet) toast(!targets.length ? '포스터가 비어 있는 기록이 없어요'
+    : `포스터 ${got}편을 붙였어요` + (miss ? ` · ${miss}편은 수정에서 직접 골라 주세요` : ''));
+}
+function renderTmdbBadge(){ $('#tmdbBadge').textContent = tmdbKey() ? '· 켜짐' : '· 꺼짐'; }
+function openTmdb(){
+  const has = !!tmdbKey();
+  $('#tmdbKey').value = ''; $('#tmdbKey').placeholder = has ? '저장된 키가 있어요 · 바꾸려면 새 키를 붙여넣기' : '32자리 키 (긴 읽기 토큰도 돼요)';
+  $('#tmdbMsg').textContent = '키는 이 기기의 브라우저에만 저장돼요.';
+  $('#tmdbOff').hidden = !has;
+  $('#tmdbDlg').showModal();
 }
 
 /* ---------- 화면 상태 ---------- */
@@ -676,6 +781,9 @@ function openForm(id, mode, convert){
   setWhere(e ? e.where : '');
   setRating(e && !converting ? e.rating : 0);
   btnDel.hidden = !e || converting; disarm();
+  picked = e && e.poster ? { id: e.tmdbId, poster: e.poster, title: e.title, year: e.year } : null;
+  renderPicks(picked ? [picked] : []);
+  if (e && !e.poster) searchPicks();
   $('#fTitle').style.borderColor = '';
   editDlg.showModal();
   if (!e) $('#fTitle').focus(); else if (converting) starIn.focus();
@@ -685,7 +793,7 @@ form.addEventListener('submit', ev => {
   const title = $('#fTitle').value.trim();
   if (!title){ $('#fTitle').style.borderColor = 'var(--low)'; $('#fTitle').focus(); return; }
   const now = Date.now();
-  const base = { title, year: $('#fYear').value.replace(/\D/g,'').slice(0,4), where, updatedAt: now };
+  const base = { title, year: $('#fYear').value.replace(/\D/g,'').slice(0,4), where, poster: picked ? picked.poster : '', tmdbId: picked ? picked.id : 0, updatedAt: now };
   const data = formMode === 'want'
     ? { ...base, status: 'want', memo: $('#fMemo').value.trim() }
     : { ...base, status: 'seen', rating, line: $('#fLine').value.trim(), note: $('#fNote').value.replace(/\s+$/,''), date: $('#fDate').value };
@@ -696,6 +804,69 @@ form.addEventListener('submit', ev => {
   toast(converting ? '본 영화로 옮겼어요' : editingId ? '수정했어요' : formMode === 'want' ? '볼 영화에 담았어요' : '크레딧에 올렸어요');
 });
 $('#fTitle').addEventListener('input', e => { e.target.style.borderColor = ''; });
+
+/* 폼 안 포스터 고르기 */
+let picked = null, pickT, pickSeq = 0;
+function pickMsg(html){ $('#pickMsg').innerHTML = html; }
+function renderPicks(list){
+  const box = $('#picks'); box.textContent = '';
+  list.forEach(m => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'pick';
+    b.setAttribute('aria-pressed', String(!!picked && picked.id === m.id));
+    if (m.poster){ const img = new Image(); img.className = 'ph'; img.alt = ''; img.loading = 'lazy'; img.src = IMG + 'w185' + m.poster; b.append(img); }
+    else { const d = document.createElement('span'); d.className = 'ph none'; d.textContent = '포스터 없음'; b.append(d); }
+    const sm = document.createElement('small'); const bt = document.createElement('b'); bt.textContent = m.title; sm.append(bt, ' ' + (m.year || '')); b.append(sm);
+    b.addEventListener('click', () => {
+      picked = (picked && picked.id === m.id) ? null : m;
+      if (picked){ $('#fTitle').value = m.title; if (m.year) $('#fYear').value = m.year; $('#fTitle').style.borderColor = ''; }
+      box.querySelectorAll('.pick').forEach(x => x.setAttribute('aria-pressed', 'false'));
+      if (picked) b.setAttribute('aria-pressed', 'true');
+      updatePickMsg(list.length);
+    });
+    box.append(b);
+  });
+  updatePickMsg(list.length);
+}
+function updatePickMsg(n){
+  if (!tmdbKey()){ pickMsg('포스터를 붙이려면 <button type="button" data-tmdb>TMDB 키 넣기</button>'); return; }
+  if (picked) pickMsg('포스터를 골랐어요 · <button type="button" data-unpick>빼기</button> · <button type="button" data-research>다른 포스터 찾기</button>');
+  else if (n) pickMsg('맞는 영화를 누르면 포스터와 개봉연도가 채워져요');
+  else pickMsg('');
+}
+$('#pickMsg').addEventListener('click', e => {
+  if (e.target.closest('[data-unpick]')){ picked = null; $$('#picks .pick').forEach(x => x.setAttribute('aria-pressed', 'false')); updatePickMsg(1); }
+  if (e.target.closest('[data-tmdb]')) openTmdb();
+  if (e.target.closest('[data-research]')) searchPicks();
+});
+async function searchPicks(){
+  const q = $('#fTitle').value.trim(), seq = ++pickSeq;
+  if (!tmdbKey() || q.length < 1){ renderPicks(picked ? [picked] : []); return; }
+  pickMsg('찾는 중…');
+  let list;
+  try { list = await searchMovies(q, $('#fYear').value.trim()); }
+  catch(err){ if (seq === pickSeq) pickMsg(err.message === 'key' ? 'TMDB 키가 맞지 않아요 · <button type="button" data-tmdb>포스터 설정</button>' : '포스터를 불러오지 못했어요'); return; }
+  if (seq !== pickSeq) return;
+  if (picked && !list.some(m => m.id === picked.id)) list.unshift(picked);
+  renderPicks(list);
+  if (!list.length) pickMsg('TMDB에서 못 찾았어요. 포스터 없이 저장돼요');
+}
+$('#fTitle').addEventListener('input', () => { clearTimeout(pickT); pickT = setTimeout(searchPicks, 450); });
+$('#fYear').addEventListener('change', () => { if ($('#fTitle').value.trim()) searchPicks(); });
+
+$('#tmdbForm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const key = $('#tmdbKey').value.trim();
+  if (!key){ if (tmdbKey()) $('#tmdbDlg').close(); else $('#tmdbKey').focus(); return; }
+  const btn = $('#tmdbSave'); btn.disabled = true; btn.textContent = '확인 중…';
+  try {
+    await tmdb('/configuration', {}, key);
+    lsSet(TMDB_KEY, key); renderTmdbBadge(); $('#tmdbDlg').close(); toast('포스터 설정을 켰어요');
+    if (editDlg.open) searchPicks(); else fillPosters(true);
+  } catch(err){
+    $('#tmdbMsg').textContent = err.message === 'key' ? '키가 맞지 않아요. 맨 아래 API 키(32자리)를 다시 복사해 주세요' : '확인하지 못했어요. 인터넷 연결을 확인해 주세요';
+  } finally { btn.disabled = false; btn.textContent = '저장'; }
+});
+$('#tmdbOff').addEventListener('click', () => { try { localStorage.removeItem(TMDB_KEY); } catch(_){} renderTmdbBadge(); $('#tmdbDlg').close(); toast('TMDB 키를 지웠어요'); });
 
 function removeEntry(id){
   const n = nodes.get(id);
@@ -744,6 +915,8 @@ menu.addEventListener('click', e => {
   const act = b.dataset.act; toggleMenu(false);
   if (act === 'sync') openSync();
   else if (act === 'daylog') importDaylog(false);
+  else if (act === 'tmdb') openTmdb();
+  else if (act === 'fillposters') fillPosters(false);
   else if (act === 'export') exportFile();
   else if (act === 'import') $('#importFile').click();
   else if (act === 'theme') cycleTheme();
@@ -884,6 +1057,7 @@ async function importDaylog(quiet = true){
   });
   if (added.length || movies.size){ save(); render(); }
   if (added.length) toast(`데이로그에서 볼 영화 ${added.length}편을 가져왔어요`);
+  if (added.length && tmdbKey()) setTimeout(() => fillPosters(true), 2500);
   else if (!quiet) toast('새로 가져올 영화가 없어요');
 }
 async function syncNow(quiet = true){
@@ -993,7 +1167,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 setInterval(() => { if (document.visibilityState === 'visible') syncNow(true); }, 120000);
 
 /* ---------- 시작 ---------- */
-load(); applyTheme(); setView('seen'); renderHero(); renderStats(); renderSyncBadge(); syncNow(true);
+load(); applyTheme(); setView('seen'); renderHero(); renderStats(); renderSyncBadge(); renderTmdbBadge(); syncNow(true);
+setTimeout(() => fillPosters(true), 4000);
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
   const hadController = !!navigator.serviceWorker.controller;
