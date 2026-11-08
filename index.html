@@ -260,6 +260,7 @@ input[type="date"].in{min-height:40px}
       <button class="btn icon-btn" id="menuBtn" aria-label="메뉴" aria-haspopup="true" aria-expanded="false">⋯</button>
       <div class="menu" id="menu" hidden>
         <button data-act="sync">기기 간 동기화 <small id="syncBadge"></small></button>
+        <button data-act="daylog">데이로그 언젠가 영화 가져오기</button>
         <hr>
         <button data-act="export">백업 파일 내보내기</button>
         <button data-act="import">백업 파일 가져오기</button>
@@ -420,7 +421,7 @@ function normEntry(raw){
 function migrate(s){
   if (Array.isArray(s)) s = { entries: s };
   s = s && typeof s === 'object' ? s : {};
-  return { entries: (s.entries || []).map(normEntry).filter(Boolean), deleted: s.deleted || {}, savedAt: +s.savedAt || 0 };
+  return { entries: (s.entries || []).map(normEntry).filter(Boolean), deleted: s.deleted || {}, dlSeen: s.dlSeen || {}, savedAt: +s.savedAt || 0 };
 }
 function load(){
   let raw = lsGet(KEY);
@@ -742,6 +743,7 @@ menu.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act; toggleMenu(false);
   if (act === 'sync') openSync();
+  else if (act === 'daylog') importDaylog(false);
   else if (act === 'export') exportFile();
   else if (act === 'import') $('#importFile').click();
   else if (act === 'theme') cycleTheme();
@@ -827,9 +829,63 @@ function mergeStates(a, b){
   const map = new Map();
   [...(a.entries || []), ...(b.entries || [])].forEach(x => { const cur = map.get(x.id); if (!cur || (x.updatedAt || 0) > (cur.updatedAt || 0)) map.set(x.id, x); });
   const entries = [...map.values()].filter(x => !(deleted[x.id] && deleted[x.id] >= (x.updatedAt || 0)));
-  return { entries, deleted, savedAt: Math.max(a.savedAt || 0, b.savedAt || 0) };
+  const dlSeen = Object.assign({}, b.dlSeen || {}, a.dlSeen || {});
+  return { entries, deleted, dlSeen, savedAt: Math.max(a.savedAt || 0, b.savedAt || 0) };
 }
-const sigOf = st => JSON.stringify({ e: [...(st.entries || [])].sort((x,y) => x.id < y.id ? -1 : 1), d: st.deleted || {} });
+const sigOf = st => JSON.stringify({ e: [...(st.entries || [])].sort((x,y) => x.id < y.id ? -1 : 1), d: st.deleted || {}, s: Object.keys(st.dlSeen || {}).sort() });
+
+/* 데이로그 '언젠가'의 영화 → 볼 영화 (읽기만 한다. 데이로그 데이터는 건드리지 않음)
+   한 번 가져온 이름은 dlSeen 에 남겨서, 여기서 지운 영화가 다시 들어오지 않게 한다. */
+const DL_MARK = 'questboard-sync', DL_GID_KEY = 'endingcredit.daylogGist';
+async function findDaylogGist(token){
+  const cached = lsGet(DL_GID_KEY); if (cached) return cached;
+  for (let page = 1; page <= 5; page++){
+    const r = await ghFetch('/gists?per_page=100&page=' + page, token);
+    if (!r.ok) return null;
+    const list = await r.json(); if (!list.length) break;
+    const g = list.find(g => g.description === DL_MARK); if (g){ lsSet(DL_GID_KEY, g.id); return g.id; }
+  }
+  return null;
+}
+async function daylogMovies(token){
+  const id = await findDaylogGist(token); if (!id) return null;
+  const r = await ghFetch('/gists/' + id + '?t=' + Date.now(), token);
+  if (r.status === 404){ try { localStorage.removeItem(DL_GID_KEY); } catch(_){} return null; }
+  if (!r.ok) throw new Error('http');
+  const g = await r.json(); const out = new Map();
+  for (const name of ['home.json', 'work.json']){
+    const f = g.files && g.files[name]; if (!f) continue;
+    let d; try { d = JSON.parse(f.truncated ? await (await fetch(f.raw_url)).text() : f.content); } catch(_){ continue; }
+    const works = d.works || {}, someday = (d.days && d.days.someday) || [];
+    someday.forEach(it => {
+      if (!it || it.done || it.canceled) return;
+      const t = String(it.text || '').trim(); const w = works[t];
+      if (t && w && w.kind === 'movie' && !w.fin) out.set(t, it.note || '');
+    });
+  }
+  return out;
+}
+async function importDaylog(quiet = true){
+  const cfg = syncCfg(); if (!cfg) { if (!quiet) toast('먼저 기기 간 동기화를 연결해 주세요'); return; }
+  let movies;
+  try { movies = await daylogMovies(cfg.token); } catch(_){ if (!quiet) toast('데이로그를 읽지 못했어요. 잠시 후 다시 해주세요'); return; }
+  if (!movies){ if (!quiet) toast('데이로그 동기화 데이터를 찾지 못했어요'); return; }
+  state.dlSeen = state.dlSeen || {};
+  const norm = s => s.replace(/\s+/g, '').toLowerCase();
+  const have = new Set(state.entries.map(e => norm(e.title)));
+  const added = [];
+  movies.forEach((note, title) => {
+    if (state.dlSeen[title]) return;
+    state.dlSeen[title] = Date.now();
+    if (have.has(norm(title))) return;
+    const now = Date.now();
+    state.entries.push(normEntry({ id: uid(), title, status: 'want', memo: note ? `데이로그 언젠가 · ${note}` : '데이로그 언젠가에서 가져옴', createdAt: now, updatedAt: now }));
+    added.push(title);
+  });
+  if (added.length || movies.size){ save(); render(); }
+  if (added.length) toast(`데이로그에서 볼 영화 ${added.length}편을 가져왔어요`);
+  else if (!quiet) toast('새로 가져올 영화가 없어요');
+}
 async function syncNow(quiet = true){
   const cfg = syncCfg(); if (!cfg || syncState.busy) return;
   syncState.busy = true; renderSyncBadge();
@@ -842,12 +898,13 @@ async function syncNow(quiet = true){
     }
     if (sigOf(merged) !== sigOf(remote)) await writeGist(cfg.token, cfg.gistId, state);
     syncState.last = Date.now(); syncState.err = '';
+    if (Date.now() - dlLast > 10*60*1000){ dlLast = Date.now(); setTimeout(() => importDaylog(true), 0); }
   } catch(e){
     syncState.err = e.message === 'token' ? '토큰이 만료됐거나 맞지 않아요' : e.message === 'nogist' ? '클라우드 기록을 찾지 못했어요' : '인터넷 연결을 확인해주세요';
     if (!quiet) toast('동기화 실패 · ' + syncState.err);
   } finally { syncState.busy = false; renderSyncBadge(); }
 }
-let pushT;
+let pushT, dlLast = 0;
 function schedulePush(){ if (!syncCfg()) return; clearTimeout(pushT); pushT = setTimeout(() => syncNow(true), 1500); }
 function renderSyncBadge(){
   const cfg = syncCfg();
@@ -896,7 +953,7 @@ $('#syncFoot').addEventListener('click', async e => {
       if (!gid){
         const newId = await createGist(token, state);
         setSyncCfg({ token, gistId: newId }); syncState.last = Date.now(); renderSyncBadge(); $('#syncDlg').close();
-        toast('동기화를 켰어요 · 이 기기 기록을 클라우드에 올렸어요');
+        toast('동기화를 켰어요 · 이 기기 기록을 클라우드에 올렸어요'); dlLast = Date.now(); importDaylog(true);
         return;
       }
       const remote = await readGist(token, gid);
@@ -928,6 +985,7 @@ $('#syncBody').addEventListener('click', async e => {
     await writeGist(token, gid, state);
     setSyncCfg({ token, gistId: gid }); syncState.last = Date.now(); syncState.err = '';
     $('#syncDlg').close(); render(); renderSyncBadge();
+    dlLast = Date.now(); setTimeout(() => importDaylog(true), 2500);
     toast({ remote: '클라우드 기록으로 바꿨어요', merge: '합쳐서 맞췄어요', local: '이 기기 기록으로 맞췄어요' }[how]);
   } catch(_){ toast('실패했어요. 잠시 후 다시 해주세요'); }
 });
