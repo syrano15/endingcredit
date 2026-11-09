@@ -633,6 +633,15 @@ header{align-items:center;margin:6px 0 26px}
   </div>
 </dialog>
 
+<!-- 추가 링크 -->
+<dialog id="addDlg">
+  <div class="sheet">
+    <div class="sheet-hd"><h3 id="addTitle">기록 추가</h3></div>
+    <div class="sheet-bd"><p class="bmsg" style="margin-top:0">링크에 담긴 기록이에요. 이미 있는 기록(같은 제목·같은 날짜)은 건너뛰어요.</p><div class="rank" id="addList"></div></div>
+    <div class="sheet-ft"><div class="right"><button type="button" class="btn" data-close>취소</button><button type="button" class="btn primary" id="addGo">추가</button></div></div>
+  </div>
+</dialog>
+
 <!-- TMDB 키 -->
 <dialog id="tmdbDlg">
   <form class="sheet" id="tmdbForm" method="dialog" novalidate>
@@ -677,7 +686,7 @@ const lsSet = (k,v) => { try{ localStorage.setItem(k,v); return true; }catch(_){
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* ---------- 상수 ---------- */
-const APP_VERSION = 'v1.4'; /* v1.0 첫 버전 · v1.1 데이로그 가져오기 · v1.2 TMDB 포스터 · v1.3 OTT 서비스별 탭 · v1.4 시리즈·다큐, 보는 중, 재관람, 통계 */
+const APP_VERSION = 'v1.5'; /* v1.0 첫 버전 · v1.1 데이로그 가져오기 · v1.2 TMDB 포스터 · v1.3 OTT 서비스별 탭 · v1.4 시리즈·다큐, 보는 중, 재관람, 통계 · v1.5 추가 링크 */
 const KEY = 'endingcredit.v2', OLD_KEY = 'endingcredit.v1', THEME_KEY = 'endingcredit.theme';
 const PLACES = [['극장','#7c5cd6'],['넷플릭스','#e50914'],['쿠팡플레이','#1f7ae0'],['디즈니플러스','#0b2fa8'],['아마존프라임','#00a8e1'],['블루레이','#5b6b84'],['TV','#2f8f6a']];
 /* 예전 'OTT' 기록은 지우지 않는다 — 그런 기록이 있을 때만 탭·선택지에 보인다 */
@@ -1357,6 +1366,39 @@ $('#btnAgain').addEventListener('click', () => {
   toast(`${e.rewatches.length + 1}회차로 기록했어요 · 날짜는 수정에서 바꿀 수 있어요`);
 });
 
+/* ---------- 추가 링크 (#add=…) ----------
+   Claude가 만들어 준 링크를 열면 그 안의 기록을 보여 주고, 확인하면 더한다. 주소창의 #add 는 바로 지운다. */
+let pendingAdd = [];
+function checkAddLink(){
+  if (!location.hash.startsWith('#add=')) return;
+  const raw = location.hash.slice(5);
+  try { history.replaceState(null, '', location.pathname + location.search); } catch(_){}
+  let list;
+  try {
+    const b64 = raw.replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64 + '='.repeat((4 - b64.length % 4) % 4));
+    const data = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))));
+    list = (Array.isArray(data) ? data : data.entries || []).map(normEntry).filter(Boolean);
+  } catch(_){ toast('추가 링크를 읽지 못했어요'); return; }
+  if (!list.length) return;
+  const key = e => normT(e.title) + '|' + (e.date || '');
+  const have = new Set(state.entries.map(key));
+  pendingAdd = list.filter(e => !have.has(key(e)));
+  const skip = list.length - pendingAdd.length;
+  $('#addTitle').textContent = pendingAdd.length ? `기록 ${pendingAdd.length}개 추가` : '추가할 기록이 없어요';
+  $('#addList').innerHTML = list.map(e => `<div class="rank-row" style="cursor:default"><span class="body"><span class="t">${esc(e.title)}</span><span class="l">${esc([statusOf(e) === 'want' ? '볼 작품' : statusOf(e) === 'watching' ? '보는 중' : dot(e.date), e.where, e.memo].filter(Boolean).join(' · '))}</span></span>${have.has(key(e)) ? '<span class="hint-pill">이미 있음</span>' : ''}</div>`).join('') + (skip ? `<p class="bmsg">${skip}개는 이미 있어서 건너뛰어요.</p>` : '');
+  $('#addGo').hidden = !pendingAdd.length;
+  $('#addDlg').showModal();
+}
+$('#addGo').addEventListener('click', () => {
+  const now = Date.now();
+  pendingAdd.forEach((e, i) => state.entries.push({ ...e, id: uid() + i, createdAt: now + i, updatedAt: now + i }));
+  const n = pendingAdd.length; pendingAdd = [];
+  save(); $('#addDlg').close(); render(); toast(`${n}개를 추가했어요`);
+  setTimeout(() => fillPosters(true), 600);
+});
+window.addEventListener('hashchange', checkAddLink);
+
 /* ---------- 메뉴 ---------- */
 const menu = $('#menu'), menuBtn = $('#menuBtn');
 function toggleMenu(open){ menu.hidden = !open; menuBtn.setAttribute('aria-expanded', String(open)); }
@@ -1627,6 +1669,7 @@ setInterval(() => { if (document.visibilityState === 'visible') syncNow(true); }
 $$('.appVer').forEach(el => { el.textContent = APP_VERSION; });
 load(); applyTheme(); setView('seen'); renderHero(); renderStats(); renderSyncBadge(); renderTmdbBadge(); syncNow(true);
 setTimeout(() => fillPosters(true), 4000);
+checkAddLink();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
   const hadController = !!navigator.serviceWorker.controller;
