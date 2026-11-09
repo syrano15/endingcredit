@@ -1368,7 +1368,7 @@ $('#btnAgain').addEventListener('click', () => {
 
 /* ---------- 추가 링크 (#add=…) ----------
    Claude가 만들어 준 링크를 열면 그 안의 기록을 보여 주고, 확인하면 더한다. 주소창의 #add 는 바로 지운다. */
-let pendingAdd = [];
+let pendingAdd = [], pendingFill = [];
 function checkAddLink(){
   if (!location.hash.startsWith('#add=')) return;
   const raw = location.hash.slice(5);
@@ -1383,18 +1383,22 @@ function checkAddLink(){
   if (!list.length) return;
   const key = e => normT(e.title) + '|' + (e.date || '');
   const have = new Set(state.entries.map(key));
-  pendingAdd = list.filter(e => !have.has(key(e)));
-  const skip = list.length - pendingAdd.length;
-  $('#addTitle').textContent = pendingAdd.length ? `기록 ${pendingAdd.length}개 추가` : '추가할 기록이 없어요';
-  $('#addList').innerHTML = list.map(e => `<div class="rank-row" style="cursor:default"><span class="body"><span class="t">${esc(e.title)}</span><span class="l">${esc([statusOf(e) === 'want' ? '볼 작품' : statusOf(e) === 'watching' ? '보는 중' : dot(e.date), e.where, e.memo].filter(Boolean).join(' · '))}</span></span>${have.has(key(e)) ? '<span class="hint-pill">이미 있음</span>' : ''}</div>`).join('') + (skip ? `<p class="bmsg">${skip}개는 이미 있어서 건너뛰어요.</p>` : '');
-  $('#addGo').hidden = !pendingAdd.length;
+  /* 날짜 없이 먼저 들어간 같은 제목·종류 기록이 있으면 새로 만들지 않고 날짜만 채운다 */
+  const dateless = e => e.date && state.entries.find(x => !x.date && x.kind === e.kind && normT(x.title) === normT(e.title));
+  pendingFill = list.filter(e => !have.has(key(e)) && dateless(e)).map(e => [dateless(e), e]);
+  pendingAdd = list.filter(e => !have.has(key(e)) && !dateless(e));
+  const skip = list.length - pendingAdd.length - pendingFill.length;
+  $('#addTitle').textContent = pendingAdd.length || pendingFill.length ? [pendingAdd.length && `기록 ${pendingAdd.length}개 추가`, pendingFill.length && `${pendingFill.length}개 날짜 채우기`].filter(Boolean).join(' · ') : '추가할 기록이 없어요';
+  $('#addList').innerHTML = list.map(e => `<div class="rank-row" style="cursor:default"><span class="body"><span class="t">${esc(e.title)}</span><span class="l">${esc([statusOf(e) === 'want' ? '볼 작품' : statusOf(e) === 'watching' ? '보는 중' : dot(e.date), e.where, e.memo].filter(Boolean).join(' · '))}</span></span>${have.has(key(e)) ? '<span class="hint-pill">이미 있음</span>' : pendingFill.some(([, x]) => x === e) ? '<span class="hint-pill">날짜 채움</span>' : ''}</div>`).join('') + (skip ? `<p class="bmsg">${skip}개는 이미 있어서 건너뛰어요.</p>` : '');
+  $('#addGo').hidden = !pendingAdd.length && !pendingFill.length;
   $('#addDlg').showModal();
 }
 $('#addGo').addEventListener('click', () => {
   const now = Date.now();
   pendingAdd.forEach((e, i) => state.entries.push({ ...e, id: uid() + i, createdAt: now + i, updatedAt: now + i }));
-  const n = pendingAdd.length; pendingAdd = [];
-  save(); $('#addDlg').close(); render(); toast(`${n}개를 추가했어요`);
+  pendingFill.forEach(([old, e]) => { old.date = e.date; old.updatedAt = now; });
+  const n = pendingAdd.length, f = pendingFill.length; pendingAdd = []; pendingFill = [];
+  save(); $('#addDlg').close(); render(); toast([n && `${n}개를 추가했어요`, f && `${f}개 날짜를 채웠어요`].filter(Boolean).join(' · '));
   setTimeout(() => fillPosters(true), 600);
 });
 window.addEventListener('hashchange', checkAddLink);
