@@ -531,6 +531,7 @@ header{align-items:center;margin:6px 0 26px}
 
   <div class="tools">
     <label class="search"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><input class="in" id="q" type="search" placeholder="제목·한줄평 검색" autocomplete="off"></label>
+    <div class="seg-mini" id="yearFilter" role="group" aria-label="본 해"></div>
     <div class="seg-mini" id="kindFilter" role="group" aria-label="종류">
       <button data-k="all" aria-pressed="true">전체</button>
       <button data-k="movie" aria-pressed="false">영화</button>
@@ -686,7 +687,7 @@ const lsSet = (k,v) => { try{ localStorage.setItem(k,v); return true; }catch(_){
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* ---------- 상수 ---------- */
-const APP_VERSION = 'v1.5'; /* v1.0 첫 버전 · v1.1 데이로그 가져오기 · v1.2 TMDB 포스터 · v1.3 OTT 서비스별 탭 · v1.4 시리즈·다큐, 보는 중, 재관람, 통계 · v1.5 추가 링크 */
+const APP_VERSION = 'v1.6'; /* v1.0 첫 버전 · v1.1 데이로그 가져오기 · v1.2 TMDB 포스터 · v1.3 OTT 서비스별 탭 · v1.4 시리즈·다큐, 보는 중, 재관람, 통계 · v1.5 추가 링크 · v1.6 본 작품 연도 탭 */
 const KEY = 'endingcredit.v2', OLD_KEY = 'endingcredit.v1', THEME_KEY = 'endingcredit.theme';
 const PLACES = [['극장','#7c5cd6'],['넷플릭스','#e50914'],['쿠팡플레이','#1f7ae0'],['디즈니플러스','#0b2fa8'],['아마존프라임','#00a8e1'],['블루레이','#5b6b84'],['TV','#2f8f6a']];
 /* 예전 'OTT' 기록은 지우지 않는다 — 그런 기록이 있을 때만 탭·선택지에 보인다 */
@@ -846,6 +847,8 @@ function openTmdb(){
 }
 
 /* ---------- 화면 상태 ---------- */
+const BASE_YEAR = 2026; /* 기록을 시작한 해 · 날짜 없거나 이보다 앞선 기록은 '2026 이전' */
+let yearF = String(new Date().getFullYear());
 let view = 'seen', place = 'all', rateF = 'all', kindF = 'all', sort = 'date', query = '';
 let statYear = String(new Date().getFullYear()), statKind = 'all';
 
@@ -856,6 +859,10 @@ function visible(){
     if (kindF !== 'all' && e.kind !== kindF) return false;
     if (q && ![e.title, e.line, e.memo].some(s => (s||'').toLowerCase().includes(q))) return false;
     if (view !== 'seen') return true;
+    if (yearF !== 'all'){
+      const ys = viewDates(e).map(d => d.slice(0, 4));
+      if (yearF === 'before' ? ys.length && !ys.some(y => +y < BASE_YEAR) : !ys.includes(yearF)) return false;
+    }
     if (place !== 'all' && e.where !== place) return false;
     if (rateF === 'good' && e.rating < 4) return false;
     if (rateF === 'bad' && e.rating > 2) return false;
@@ -957,7 +964,17 @@ function fillCard(n, e){
   n.classList.toggle('low', st === 'seen' && e.rating > 0 && e.rating <= 2);
   n.setAttribute('aria-label', want ? `${e.title}, 볼 작품` : watching ? `${e.title}, 보는 중` : `${e.title}, 별점 ${fmt(e.rating)}`);
 }
+function renderYears(){
+  const cy = new Date().getFullYear();
+  const ys = new Set([String(Math.max(cy, BASE_YEAR))]);
+  state.entries.forEach(e => { if (statusOf(e) === 'seen') viewDates(e).forEach(d => { if (+d.slice(0, 4) >= BASE_YEAR) ys.add(d.slice(0, 4)); }); });
+  const opts = [...[...ys].sort().reverse().map(y => [y, y]), ['before', `${BASE_YEAR} 이전`], ['all', '전체']];
+  if (!opts.some(([k]) => k === yearF)) yearF = opts[0][0];
+  const html = opts.map(([k, t]) => `<button data-y="${k}" aria-pressed="${k === yearF}">${t}</button>`).join('');
+  const el = $('#yearFilter'); if (el.innerHTML !== html) el.innerHTML = html;
+}
 function renderList(){
+  renderYears();
   const arr = visible();
   const ids = new Set(arr.map(e => e.id));
   const first = new Map();
@@ -1092,7 +1109,7 @@ function setView(v){
   $$('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.v === v)));
   const seen = v === 'seen', stats = v === 'stats';
   $('#listView').hidden = stats; $('#statsView').hidden = !stats;
-  $('#places').hidden = !seen; $('#rateFilter').hidden = !seen; $('#sort').hidden = !seen;
+  $('#places').hidden = !seen; $('#yearFilter').hidden = !seen; $('#rateFilter').hidden = !seen; $('#sort').hidden = !seen;
   $('#q').placeholder = seen ? '제목·한줄평 검색' : '제목·메모 검색';
   $('#addBtn').setAttribute('aria-label', v === 'want' ? '볼 작품 담기' : v === 'watching' ? '보는 중 추가' : '기록하기');
   if (stats) renderStatsView(); else renderList();
@@ -1101,6 +1118,10 @@ $$('.tab').forEach(t => t.addEventListener('click', () => setView(t.dataset.v)))
 $('#places').addEventListener('click', e => {
   const p = e.target.closest('.pill'); if (!p) return;
   place = p.dataset.p; $$('#places .pill').forEach(x => x.setAttribute('aria-pressed', String(x === p))); renderList();
+});
+$('#yearFilter').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  yearF = b.dataset.y; $$('#yearFilter button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderList();
 });
 $$('#rateFilter button').forEach(b => b.addEventListener('click', () => {
   rateF = b.dataset.f; $$('#rateFilter button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderList();
