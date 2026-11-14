@@ -479,6 +479,18 @@ header{align-items:center;margin:6px 0 26px}
   .card .title{font-size:16px}
   .kpi + .kpi{border-left:0}
 }
+/* 휴대폰: 한 줄 목록 · 통계 1열 */
+@media (max-width:600px){
+  .list{gap:6px}
+  .card{padding:8px 12px 8px 8px;gap:12px;border-radius:14px}
+  .card .pslot .poster.sm{width:40px;height:58px;border-radius:6px;font-size:7px}
+  .card .title{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .sub{display:none}
+  .card .meta{margin-top:3px;font-size:12px;white-space:nowrap;overflow:hidden}
+  .card .side{flex-direction:row;align-items:center;gap:6px}
+  .card .side b{font-size:16px;min-width:26px;text-align:right}
+  .st-grid{grid-template-columns:minmax(0,1fr)}
+}
 @media (prefers-reduced-motion:reduce){ .tab::after{transition:none} }
 </style>
 </head>
@@ -687,7 +699,7 @@ const lsSet = (k,v) => { try{ localStorage.setItem(k,v); return true; }catch(_){
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* ---------- 상수 ---------- */
-const APP_VERSION = 'v1.6'; /* v1.0 첫 버전 · v1.1 데이로그 가져오기 · v1.2 TMDB 포스터 · v1.3 OTT 서비스별 탭 · v1.4 시리즈·다큐, 보는 중, 재관람, 통계 · v1.5 추가 링크 · v1.6 본 작품 연도 탭 */
+const APP_VERSION = 'v1.7'; /* v1.0 첫 버전 · v1.1 데이로그 가져오기 · v1.2 TMDB 포스터 · v1.3 OTT 서비스별 탭 · v1.4 시리즈·다큐, 보는 중, 재관람, 통계 · v1.5 추가 링크 · v1.6 본 작품 연도 탭 · v1.7 휴대폰 한 줄 목록, 통계 1열 */
 const KEY = 'endingcredit.v2', OLD_KEY = 'endingcredit.v1', THEME_KEY = 'endingcredit.theme';
 const PLACES = [['극장','#7c5cd6'],['넷플릭스','#e50914'],['쿠팡플레이','#1f7ae0'],['디즈니플러스','#0b2fa8'],['아마존프라임','#00a8e1'],['블루레이','#5b6b84'],['TV','#2f8f6a']];
 /* 예전 'OTT' 기록은 지우지 않는다 — 그런 기록이 있을 때만 탭·선택지에 보인다 */
